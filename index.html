@@ -6,135 +6,88 @@
   <title>Wicker</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
     body {
-      min-height: 100vh;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-family: system-ui, -apple-system, sans-serif;
-      background: #0f1117;
-      color: #e8eaed;
-    }
-    .card {
-      text-align: center;
-      padding: 2.5rem 2rem;
-      max-width: 420px;
-      width: 100%;
-    }
-    h1 { font-size: 1.75rem; font-weight: 600; margin-bottom: 0.5rem; }
-    .subtitle { color: #9aa0a6; font-size: 0.95rem; margin-bottom: 2rem; }
-    .status {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.6rem;
-      padding: 0.6rem 1.2rem;
-      border-radius: 999px;
-      font-size: 0.9rem;
-      font-weight: 500;
-      margin-bottom: 2rem;
-    }
-    .status.active { background: #1a3a2a; color: #6dd99a; }
-    .status.inactive { background: #3a1a1a; color: #f28b82; }
-    .status.pending { background: #2a2a1a; color: #fdd663; }
-    .dot {
-      width: 10px; height: 10px;
-      border-radius: 50%;
-      background: currentColor;
-    }
-    .status.active .dot { animation: pulse 2s ease-in-out infinite; }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.4; }
-    }
-    button {
-      width: 100%;
-      padding: 0.85rem 1.5rem;
-      font-size: 1rem;
-      font-weight: 600;
-      border: none;
-      border-radius: 10px;
+      font-family: Georgia, "Times New Roman", serif;
+      background: #12100e;
+      color: #c4b8a4;
       cursor: pointer;
-      transition: opacity 0.15s;
+      user-select: none;
+      transition: background 0.8s ease;
     }
-    button:hover { opacity: 0.9; }
-    button:active { opacity: 0.75; }
-    #toggleBtn { background: #4c8bf5; color: #fff; }
-    #toggleBtn.stop { background: #3c4043; color: #e8eaed; }
-    .info {
-      margin-top: 1.5rem;
-      font-size: 0.8rem;
-      color: #5f6368;
-      line-height: 1.5;
+    body.on {
+      background: #1a1612;
+    }
+    .wrap {
+      text-align: center;
+    }
+    .lamp {
+      width: 8px;
+      height: 8px;
+      margin: 0 auto 2.2rem;
+      border-radius: 50%;
+      background: #3a3428;
+      box-shadow: none;
+      transition: background 0.6s ease, box-shadow 0.8s ease;
+    }
+    body.on .lamp {
+      background: #e8c07a;
+      box-shadow: 0 0 18px 6px rgba(232, 192, 122, 0.35);
     }
     .time {
-      margin-top: 1rem;
-      font-size: 2rem;
-      font-weight: 300;
+      font-size: clamp(3rem, 9vw, 5.5rem);
+      font-weight: 400;
+      letter-spacing: 0.08em;
       font-variant-numeric: tabular-nums;
-      color: #bdc1c6;
+      color: #8a7f70;
+      transition: color 0.6s ease;
+    }
+    body.on .time {
+      color: #d9cbb8;
+    }
+    .name {
+      margin-top: 1.4rem;
+      font-size: 0.72rem;
+      letter-spacing: 0.42em;
+      text-transform: uppercase;
+      color: #4a443c;
     }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>Wicker</h1>
-    <p class="subtitle">Keep this tab open</p>
-
-    <div id="status" class="status pending">
-      <span class="dot"></span>
-      <span id="statusText">Esperando activación</span>
-    </div>
-
-    <div class="time" id="clock">--:--:--</div>
-
-    <button id="toggleBtn">Activar</button>
-
-    <p class="info">
-      Mantén esta pestaña visible y activa. Si cambias de pestaña,
-      el bloqueo de suspensión puede pausarse según el navegador.
-    </p>
+  <div class="wrap">
+    <div class="lamp" aria-hidden="true"></div>
+    <div class="time" id="clock">--:--</div>
+    <div class="name">Wicker</div>
   </div>
 
   <script>
-    const statusEl = document.getElementById('status');
-    const statusText = document.getElementById('statusText');
-    const toggleBtn = document.getElementById('toggleBtn');
     const clockEl = document.getElementById('clock');
-
     let wakeLock = null;
     let active = false;
-    let startTime = null;
     let fallbackTimer = null;
 
     function updateClock() {
-      const now = new Date();
-      clockEl.textContent = now.toLocaleTimeString('es-MX', { hour12: false });
+      clockEl.textContent = new Date().toLocaleTimeString('es-MX', {
+        hour12: false,
+        hour: '2-digit',
+        minute: '2-digit'
+      });
     }
     setInterval(updateClock, 1000);
     updateClock();
 
-    function setUI(state) {
-      statusEl.className = 'status ' + state;
-      if (state === 'active') {
-        statusText.textContent = 'PC activa — sin suspensión';
-        toggleBtn.textContent = 'Desactivar';
-        toggleBtn.classList.add('stop');
-      } else if (state === 'inactive') {
-        statusText.textContent = 'Desactivado';
-        toggleBtn.textContent = 'Activar';
-        toggleBtn.classList.remove('stop');
-      } else {
-        statusText.textContent = 'Esperando activación';
-        toggleBtn.textContent = 'Activar';
-        toggleBtn.classList.remove('stop');
-      }
+    function setOn(on) {
+      document.body.classList.toggle('on', on);
     }
 
     function startFallback() {
       stopFallback();
       fallbackTimer = setInterval(() => {
-        document.title = active ? '● Wicker' : 'Wicker';
-        setTimeout(() => { document.title = 'Wicker'; }, 200);
+        document.title = 'Wicker';
       }, 30000);
     }
 
@@ -145,50 +98,42 @@
       }
     }
 
+    async function requestLock() {
+      if (!('wakeLock' in navigator)) return;
+      try {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => {
+          if (active) setOn(false);
+        });
+      } catch (_) {}
+    }
+
     async function activate() {
       active = true;
-      startTime = Date.now();
       startFallback();
-
-      if ('wakeLock' in navigator) {
-        try {
-          wakeLock = await navigator.wakeLock.request('screen');
-          wakeLock.addEventListener('release', () => {
-            if (active) setUI('pending');
-          });
-          setUI('active');
-          return;
-        } catch (err) {
-          console.warn('Wake Lock no disponible:', err);
-        }
-      }
-
-      setUI('active');
+      await requestLock();
+      setOn(true);
     }
 
     async function deactivate() {
       active = false;
-      startTime = null;
       stopFallback();
-
       if (wakeLock) {
-        await wakeLock.release();
+        try { await wakeLock.release(); } catch (_) {}
         wakeLock = null;
       }
-
-      setUI('inactive');
+      setOn(false);
     }
 
-    toggleBtn.addEventListener('click', () => {
+    document.addEventListener('click', () => {
       if (active) deactivate();
       else activate();
     });
 
     document.addEventListener('visibilitychange', async () => {
       if (document.visibilityState === 'visible' && active && !wakeLock) {
-        try {
-          wakeLock = await navigator.wakeLock.request('screen');
-        } catch (_) {}
+        await requestLock();
+        setOn(true);
       }
     });
   </script>
