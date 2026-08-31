@@ -135,14 +135,12 @@
       setOn(false);
     }
 
-    function toggleWicker(e) {
-      e.stopPropagation();
+    function toggleWicker() {
       if (active) deactivate();
       else activate();
     }
 
-    document.getElementById('lamp').addEventListener('click', toggleWicker);
-    document.getElementById('wickerToggle').addEventListener('click', toggleWicker);
+    document.addEventListener('click', toggleWicker);
 
     document.addEventListener('visibilitychange', async () => {
       if (document.visibilityState === 'visible' && active && !wakeLock) {
