@@ -86,10 +86,45 @@
       margin-top: 1.35rem;
     }
     .actions .hint { margin-top: 0; }
+    .title-drag { display: none; }
     body.is-app .hint-app { display: none; }
+    body.is-app .actions { display: none; }
+    body.is-app .title-drag {
+      display: block;
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 2;
+      height: env(titlebar-area-height, 14px);
+      width: env(titlebar-area-width, 100%);
+      -webkit-app-region: drag;
+      app-region: drag;
+    }
+    body.is-app {
+      padding-top: env(titlebar-area-height, 0px);
+    }
+    body.is-app .wrap {
+      width: auto;
+      padding: 0.15rem 0.55rem 0.35rem;
+    }
+    body.is-app .lamp {
+      width: 6px;
+      height: 6px;
+      margin-bottom: 0.55rem;
+    }
+    body.is-app .time { font-size: 1.85rem; }
+    body.is-app .date {
+      margin-top: 0.15rem;
+      font-size: 0.62rem;
+    }
+    body.is-app .name {
+      margin-top: 0.4rem;
+      font-size: 0.5rem;
+    }
   </style>
 </head>
 <body>
+  <div class="title-drag" aria-hidden="true"></div>
   <div class="wrap">
     <div class="lamp" id="lamp" title="Wicker"></div>
     <div class="time" id="clock">--:--</div>
@@ -315,8 +350,24 @@
       openWidget();
     });
 
-    if (window.matchMedia('(display-mode: standalone)').matches) {
+    function isStandaloneApp() {
+      return (
+        window.matchMedia('(display-mode: standalone)').matches ||
+        window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+        window.matchMedia('(display-mode: minimal-ui)').matches
+      );
+    }
+
+    function shrinkAppWindow() {
+      if (!isStandaloneApp()) return;
+      window.resizeTo(1, 1);
+    }
+
+    if (isStandaloneApp()) {
       document.body.classList.add('is-app');
+      shrinkAppWindow();
+      requestAnimationFrame(shrinkAppWindow);
+      setTimeout(shrinkAppWindow, 80);
     }
 
     window.addEventListener('beforeinstallprompt', (event) => {
