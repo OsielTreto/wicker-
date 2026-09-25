@@ -4,6 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Wicker</title>
+  <meta name="theme-color" content="#12100e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Wicker">
+  <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="favicon.svg">
   <style>
@@ -17,6 +21,7 @@
       background: #12100e;
       color: #c4b8a4;
       user-select: none;
+      overflow: hidden;
       transition: background 0.8s ease;
     }
     body.on { background: #1a1612; }
@@ -59,9 +64,29 @@
       letter-spacing: 0.42em;
       text-transform: uppercase;
       color: #4a443c;
-      cursor: pointer;
     }
-    .name:hover { color: #6a5e4c; }
+    .hint {
+      margin-top: 1.35rem;
+      font-size: 0.58rem;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: #3a342c;
+      cursor: pointer;
+      background: none;
+      border: 0;
+      font-family: inherit;
+    }
+    .hint:hover { color: #6a5e4c; }
+    .hint.is-open { color: #8a7f70; }
+    .hint.is-error { color: #6a4038; }
+    .actions {
+      display: flex;
+      justify-content: center;
+      gap: 1.4rem;
+      margin-top: 1.35rem;
+    }
+    .actions .hint { margin-top: 0; }
+    body.is-app .hint-app { display: none; }
   </style>
 </head>
 <body>
@@ -69,31 +94,108 @@
     <div class="lamp" id="lamp" title="Wicker"></div>
     <div class="time" id="clock">--:--</div>
     <div class="date" id="date"></div>
-    <div class="name" id="wickerToggle">Wicker</div>
+    <div class="name">Wicker</div>
+    <div class="actions">
+      <button type="button" class="hint" id="openWidget" title="Ventana flotante sin URL">widget</button>
+      <button type="button" class="hint hint-app" id="installApp" title="Instalar en Edge sin barra de dirección">app</button>
+    </div>
   </div>
 
   <script>
     const clockEl = document.getElementById('clock');
     const dateEl = document.getElementById('date');
+    const widgetBtn = document.getElementById('openWidget');
+    const installBtn = document.getElementById('installApp');
+    let installPrompt = null;
 
     let wakeLock = null;
     let active = false;
     let fallbackTimer = null;
+    let pipWindow = null;
+
+    const pipStyles = `
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { height: 100%; }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: Georgia, "Times New Roman", serif;
+        background: #12100e;
+        color: #c4b8a4;
+        user-select: none;
+        overflow: hidden;
+        transition: background 0.8s ease;
+      }
+      body.on { background: #1a1612; }
+      .wrap { text-align: center; padding: 0.4rem; }
+      .lamp {
+        width: 7px;
+        height: 7px;
+        margin: 0 auto 0.9rem;
+        border-radius: 50%;
+        background: #3a3428;
+        transition: background 0.6s ease, box-shadow 0.8s ease;
+      }
+      body.on .lamp {
+        background: #e8c07a;
+        box-shadow: 0 0 14px 5px rgba(232, 192, 122, 0.35);
+      }
+      .time {
+        font-size: 2.4rem;
+        letter-spacing: 0.08em;
+        font-variant-numeric: tabular-nums;
+        color: #8a7f70;
+        transition: color 0.6s ease;
+      }
+      body.on .time { color: #d9cbb8; }
+      .date {
+        margin-top: 0.3rem;
+        font-size: 0.7rem;
+        letter-spacing: 0.16em;
+        text-transform: lowercase;
+        color: #5a5248;
+      }
+      .name {
+        margin-top: 0.7rem;
+        font-size: 0.55rem;
+        letter-spacing: 0.38em;
+        text-transform: uppercase;
+        color: #4a443c;
+      }
+    `;
+
+    function formatNow() {
+      const now = new Date();
+      return {
+        time: now.toLocaleTimeString('es-MX', {
+          hour12: false, hour: '2-digit', minute: '2-digit'
+        }),
+        date: now.toLocaleDateString('es-MX', {
+          weekday: 'short', day: 'numeric', month: 'short'
+        })
+      };
+    }
+
+    function paintClock(doc) {
+      if (!doc) return;
+      const timeNode = doc.getElementById('clock');
+      const dateNode = doc.getElementById('date');
+      const { time, date } = formatNow();
+      if (timeNode) timeNode.textContent = time;
+      if (dateNode) dateNode.textContent = date;
+    }
 
     function updateClock() {
-      const now = new Date();
-      clockEl.textContent = now.toLocaleTimeString('es-MX', {
-        hour12: false, hour: '2-digit', minute: '2-digit'
-      });
-      dateEl.textContent = now.toLocaleDateString('es-MX', {
-        weekday: 'short', day: 'numeric', month: 'short'
-      });
+      paintClock(document);
+      if (pipWindow) paintClock(pipWindow.document);
     }
     setInterval(updateClock, 1000);
     updateClock();
 
     function setOn(on) {
       document.body.classList.toggle('on', on);
+      if (pipWindow) pipWindow.document.body.classList.toggle('on', on);
     }
 
     function startFallback() {
@@ -140,7 +242,107 @@
       else activate();
     }
 
-    document.addEventListener('click', toggleWicker);
+    function setWidgetLabel(open) {
+      widgetBtn.classList.toggle('is-open', open);
+      widgetBtn.textContent = open ? 'cerrar' : 'widget';
+    }
+
+    function fillPip(win) {
+      win.document.documentElement.lang = 'es';
+      win.document.title = 'Wicker';
+      const style = win.document.createElement('style');
+      style.textContent = pipStyles;
+      win.document.head.appendChild(style);
+      win.document.body.className = document.body.className;
+      win.document.body.innerHTML = `
+        <div class="wrap">
+          <div class="lamp" id="lamp"></div>
+          <div class="time" id="clock">--:--</div>
+          <div class="date" id="date"></div>
+          <div class="name">Wicker</div>
+        </div>
+      `;
+      paintClock(win.document);
+      win.document.addEventListener('click', toggleWicker);
+    }
+
+    async function openWidget() {
+      if (pipWindow) {
+        pipWindow.close();
+        return;
+      }
+
+      if (!('documentPictureInPicture' in window)) {
+        widgetBtn.classList.add('is-error');
+        widgetBtn.textContent = 'edge reciente';
+        setTimeout(() => {
+          widgetBtn.classList.remove('is-error');
+          widgetBtn.textContent = 'widget';
+        }, 1800);
+        return;
+      }
+
+      try {
+        const win = await documentPictureInPicture.requestWindow({
+          width: 280,
+          height: 200,
+          disallowReturnToOpener: true
+        });
+        pipWindow = win;
+        fillPip(win);
+        setWidgetLabel(true);
+        win.addEventListener('pagehide', () => {
+          pipWindow = null;
+          setWidgetLabel(false);
+        });
+      } catch (_) {
+        widgetBtn.classList.add('is-error');
+        widgetBtn.textContent = 'bloqueado';
+        setTimeout(() => {
+          widgetBtn.classList.remove('is-error');
+          widgetBtn.textContent = 'widget';
+        }, 1800);
+      }
+    }
+
+    document.addEventListener('click', (event) => {
+      if (event.target.closest('#openWidget, #installApp')) return;
+      toggleWicker();
+    });
+
+    widgetBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      openWidget();
+    });
+
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      document.body.classList.add('is-app');
+    }
+
+    window.addEventListener('beforeinstallprompt', (event) => {
+      event.preventDefault();
+      installPrompt = event;
+    });
+
+    installBtn.addEventListener('click', async (event) => {
+      event.stopPropagation();
+      if (installPrompt) {
+        installPrompt.prompt();
+        await installPrompt.userChoice.catch(() => {});
+        installPrompt = null;
+        return;
+      }
+      installBtn.classList.add('is-error');
+      installBtn.textContent = '⋯ apps';
+      setTimeout(() => {
+        installBtn.classList.remove('is-error');
+        installBtn.textContent = 'app';
+      }, 2200);
+    });
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
 
     document.addEventListener('visibilitychange', async () => {
       if (document.visibilityState === 'visible' && active && !wakeLock) {
